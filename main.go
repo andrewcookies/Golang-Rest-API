@@ -1,4 +1,4 @@
-package main
+ package main
 
 import (
     "encoding/json"
@@ -40,9 +40,6 @@ func setLocalList(list []shoppingItem) (error){
     }
 
 	ioutil.WriteFile("./resources/shopList.json",body,0644)
-    // if err != nil {
-    //     return errors.New("ShopList WriteFile error")
-    // }
     return nil
 }
 
@@ -91,16 +88,67 @@ func postHttpShoppingList(w http.ResponseWriter, r *http.Request){
     //return result
     w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(newItem)
+}
 
 
+func updateShoppingItem(w http.ResponseWriter, r *http.Request){
+	eventID := mux.Vars(r)["id"]
+
+	list,listError := getLocalList()
+	if listError != nil {
+		fmt.Fprintf(w, "updateShoppingItem error")
+		return
+	}
+
+	reqBody, bodyErr := ioutil.ReadAll(r.Body)
+	if bodyErr != nil {
+		fmt.Fprintf(w, "Body format not correct")
+		return
+	}
+
+
+	//convert data to shopping item
+	var newItem shoppingItem
+	jsonErr := json.Unmarshal(reqBody, &newItem)
+    if jsonErr != nil {
+    	fmt.Fprintf(w, "Body format not correct")
+        return 
+    }
+
+
+	for i,item := range list {
+		if item.ID == eventID {
+			item.Quantity = newItem.Quantity
+			item.Item = newItem.Item
+			list[i] = newItem
+			//list = append(list[:i], item)
+		}
+	}
+
+	err := setLocalList(list)
+    if err != nil {
+    	fmt.Fprintf(w, "setLocalList error")
+        return 
+    }
+
+    fmt.Fprintf(w,"updateShoppingItem SUCCESS")
+
+}
+
+func welcome(w http.ResponseWriter, r *http.Request){
+	fmt.Fprintf(w, "GOLANG ShopItem Example\n\nGET localhost:8080/shoppingList\nPOST localhost:8080/shoppingList (with body)\nPATCH localhost:8080/shoppingList/id\n")
 }
 
 func main(){
     //start router
     router := mux.NewRouter().StrictSlash(true)
+    router.HandleFunc("/", welcome).Methods("GET")
     router.HandleFunc("/shoppingList", getHttpShoppingList).Methods("GET")
     router.HandleFunc("/shoppingList", postHttpShoppingList).Methods("POST")
-	log.Fatal(http.ListenAndServe(":8080", router))
-    fmt.Printf("Starting server at port 9090\n")
+    router.HandleFunc("/shoppingList/{id}", updateShoppingItem).Methods("PATCH")
 
+    fmt.Printf("Starting server at port 8080...\n\n")
+
+
+	log.Fatal(http.ListenAndServe(":8080", router))
 }
