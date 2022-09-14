@@ -1,4 +1,4 @@
- package main
+package main
 
 import (
     "encoding/json"
@@ -29,8 +29,7 @@ func getLocalList() ([]shoppingItem,error){
         return nil, errors.New("ShopList parse error")
     }
 
-    return payload,nil
-}
+    return payload,nil }
 
 func setLocalList(list []shoppingItem) (error){
 
@@ -40,20 +39,41 @@ func setLocalList(list []shoppingItem) (error){
     }
 
 	ioutil.WriteFile("./resources/shopList.json",body,0644)
-    return nil
-}
+    return nil}
 
+func getHttpShoppingListItem(w http.ResponseWriter, r *http.Request){
+	eventID := mux.Vars(r)["id"]
 
-func getHttpShoppingList(w http.ResponseWriter, r *http.Request){
 	list,error := getLocalList()
 	if error != nil {
         fmt.Fprintf(w, "getHttpShoppingList error")
     }
 
-    json.NewEncoder(w).Encode(list)
+    value := false
+    for _,item := range list {
+		if item.ID == eventID {
+			value = true
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(item) 
+		}
+	}
+
+	if value == false {
+		fmt.Fprintf(w, "%s item does not exist", eventID)
+	}
 }
 
-func postHttpShoppingList(w http.ResponseWriter, r *http.Request){
+func getAllHttpShoppingList(w http.ResponseWriter, r *http.Request){
+
+	list,error := getLocalList()
+	if error != nil {
+        fmt.Fprintf(w, "getHttpShoppingList error")
+    }
+
+    json.NewEncoder(w).Encode(list) 
+}
+
+func postHttpShoppingListItem(w http.ResponseWriter, r *http.Request){
 	//get local list...
 	list,listError := getLocalList()
 	if listError != nil {
@@ -63,7 +83,6 @@ func postHttpShoppingList(w http.ResponseWriter, r *http.Request){
 
 
 	//get new item from post body...
-	var newItem shoppingItem
 	reqBody, bodyErr := ioutil.ReadAll(r.Body)
 	if bodyErr != nil {
 		fmt.Fprintf(w, "Body format not correct")
@@ -71,6 +90,7 @@ func postHttpShoppingList(w http.ResponseWriter, r *http.Request){
 	}
 
 	//convert data to shopping item
+	var newItem shoppingItem
 	jsonErr := json.Unmarshal(reqBody, &newItem)
     if jsonErr != nil {
     	fmt.Fprintf(w, "Body format not correct")
@@ -87,9 +107,8 @@ func postHttpShoppingList(w http.ResponseWriter, r *http.Request){
 
     //return result
     w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(newItem)
+	json.NewEncoder(w).Encode(list) 
 }
-
 
 func updateShoppingItem(w http.ResponseWriter, r *http.Request){
 	eventID := mux.Vars(r)["id"]
@@ -115,14 +134,18 @@ func updateShoppingItem(w http.ResponseWriter, r *http.Request){
         return 
     }
 
-
+    checkId := false
 	for i,item := range list {
 		if item.ID == eventID {
 			item.Quantity = newItem.Quantity
 			item.Item = newItem.Item
 			list[i] = newItem
-			//list = append(list[:i], item)
+			checkId = true
 		}
+	}
+
+	if checkId == false {
+		fmt.Fprintf(w, "%s id does not exist", eventID)
 	}
 
 	err := setLocalList(list)
@@ -131,7 +154,50 @@ func updateShoppingItem(w http.ResponseWriter, r *http.Request){
         return 
     }
 
-    fmt.Fprintf(w,"updateShoppingItem SUCCESS")
+    fmt.Fprintf(w,"updateShoppingItem SUCCESS")}
+
+func deleteAllShoppingItem(w http.ResponseWriter, r *http.Request){
+	list,listError := getLocalList()
+	if listError != nil {
+		fmt.Fprintf(w, "updateShoppingItem error")
+		return
+	}
+
+	list = list[:0]
+
+	err := setLocalList(list)
+    if err != nil {
+    	fmt.Fprintf(w, "setLocalList error")
+        return 
+    }
+
+    w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(list) }
+
+func deleteShoppingItem(w http.ResponseWriter, r *http.Request){
+	eventID := mux.Vars(r)["id"]
+
+	list,listError := getLocalList()
+	if listError != nil {
+		fmt.Fprintf(w, "updateShoppingItem error")
+		return
+	}
+
+	for i,item := range list {
+		if item.ID == eventID {
+			list = append(list[:i], list[i+1:]...)
+		}
+	}
+
+	
+	err := setLocalList(list)
+    if err != nil {
+    	fmt.Fprintf(w, "setLocalList error")
+        return 
+    }
+
+    w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(list)
 
 }
 
@@ -143,9 +209,13 @@ func main(){
     //start router
     router := mux.NewRouter().StrictSlash(true)
     router.HandleFunc("/", welcome).Methods("GET")
-    router.HandleFunc("/shoppingList", getHttpShoppingList).Methods("GET")
-    router.HandleFunc("/shoppingList", postHttpShoppingList).Methods("POST")
+    router.HandleFunc("/shoppingList/{id}", getHttpShoppingListItem).Methods("GET")
+    router.HandleFunc("/shoppingList", getAllHttpShoppingList).Methods("GET")
+    router.HandleFunc("/shoppingList", postHttpShoppingListItem).Methods("POST")
     router.HandleFunc("/shoppingList/{id}", updateShoppingItem).Methods("PATCH")
+    router.HandleFunc("/shoppingList", deleteAllShoppingItem).Methods("DELETE")
+    router.HandleFunc("/shoppingList/{id}", deleteShoppingItem).Methods("DELETE")
+
 
     fmt.Printf("Starting server at port 8080...\n\n")
 
